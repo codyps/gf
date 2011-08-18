@@ -21,7 +21,7 @@ VPATH = $(srcdir)
 CFLAGS          += -ggdb
 override CFLAGS += -Wall -Wextra -Werror -pipe
 LDFLAGS         += -Wl,--as-needed -O2
-override LDFLAGS += -lSDL
+override LDFLAGS += -lSDL -lGL
 
 .PHONY: rebuild
 rebuild: | clean build
