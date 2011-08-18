@@ -12,7 +12,15 @@ static int init(void)
 {
 	SDL_Init(SDL_INIT_EVERYTHING);
 
-	screen = SDL_SetVideoMode(INIT_W, INIT_V, INIT_BPP, SDL_SWSURFACE);
+	const SDL_VideoInfo *info = SDL_GetVideoInfo();
+
+	int vid_flags = SDL_OPENGL | SDL_GL_DOUBLEBUFFER;
+	if (info->hw_available)
+		vid_flags |= SDL_HWSURFACE;
+	else
+		vid_flags |= SDL_SWSURFACE;
+
+	screen = SDL_SetVideoMode(INIT_W, INIT_V, info->vfmt->BitsPerPixel, vid_flags);
 	SDL_WM_SetCaption( "Event test", NULL );
 
 
