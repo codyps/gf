@@ -108,6 +108,20 @@ static void fini(void)
 	SDL_Quit();
 }
 
+void handle_keypress(SDL_KeyboardEvent *key)
+{
+	SDL_keysym *ks = &key->keysym;
+
+	switch(ks->sym) {
+	case SDLK_LEFT:
+		grid_recolor(grid, GRID_W, GRID_H);
+		grid_draw(grid, GRID_W, GRID_H);
+		break;
+	default:
+		eprint("unhandled keypress %d %d", ks->scancode, ks->unicode);
+	}
+}
+
 #define __unused __attribute__((__unused__))
 int main(__unused int argc, __unused char **argv)
 {
@@ -120,11 +134,10 @@ int main(__unused int argc, __unused char **argv)
 	grid_draw(grid, GRID_W, GRID_H);
 
 	for(;;) {
-		while(SDL_PollEvent(&event)) {
+		while(SDL_WaitEvent(&event)) {
 			switch(event.type) {
-			case 3:
-				grid_recolor(grid, GRID_W, GRID_H);
-				grid_draw(grid, GRID_W, GRID_H);
+			case SDL_KEYDOWN:
+				handle_keypress(&event.key);
 				break;
 			case SDL_QUIT:
 				goto done;
@@ -132,6 +145,7 @@ int main(__unused int argc, __unused char **argv)
 				printf("unhandled event type %d\n", event.type);
 
 			}
+			SDL_Flip(screen);
 		}
 	}
 
