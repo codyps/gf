@@ -9,11 +9,15 @@
 #define INIT_W 840
 #define INIT_V 640
 
-#define RECT_EDGE 10
+#define RECT_EDGE 25
 
 #define GRID_W 100
 #define GRID_H 100
 
+#define eprint(fmt, ...) do {			\
+	fprintf(stderr, fmt, ## __VA_ARGS__);	\
+	putc('\n', stderr);			\
+} while (0)
 
 struct tile {
 	SDL_Rect rect;
@@ -38,7 +42,7 @@ static void grid_init(struct tile *grid, int width, int vert)
 			r->x = w * RECT_EDGE;
 			r->y = v * RECT_EDGE;
 
-			tile->color = w << 16 | v;
+			tile->color = (v << 18) | ((w & 0xffff) << 2) | rand();
 		}
 	}
 }
@@ -50,7 +54,8 @@ static void grid_draw(struct tile *grid, int width, int vert)
 		int w;
 		for (w = 0; w < width; w++) {
 			struct tile *tile = grid + v * width + w;
-			SDL_FillRect(screen, &tile->rect, tile->color);
+			if (SDL_FillRect(screen, &tile->rect, tile->color) == -1)
+				eprint("FillRect\n");
 		}
 	}
 }
@@ -61,20 +66,25 @@ static int init(void)
 
 	const SDL_VideoInfo *info = SDL_GetVideoInfo();
 
-	int vid_flags = SDL_OPENGL | SDL_GL_DOUBLEBUFFER;
-	if (info->hw_available)
-		vid_flags |= SDL_HWSURFACE;
-	else
+	int vid_flags = 0;
+	if (info->hw_available) {
+		eprint("Video: using hardware.");
+		vid_flags |= SDL_HWSURFACE | SDL_OPENGL | SDL_GL_DOUBLEBUFFER;
+	} else {
+		eprint("Video: using software.");
 		vid_flags |= SDL_SWSURFACE;
+	}
 
 	screen = SDL_SetVideoMode(INIT_W, INIT_V, info->vfmt->BitsPerPixel, vid_flags);
 
 	/* GL 2d setup */
+#if 0
 	glViewport(0, 0, INIT_W, INIT_V);
 	glMatrixMode(GL_PROJECTION);
 	glOrtho(0, INIT_W, INIT_V, 0, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 	glDisable(GL_DEPTH_TEST);
+#endif
 
 	return 0;
 }
@@ -94,17 +104,17 @@ int main(__unused int argc, __unused char **argv)
 	init();
 
 	grid_init(grid, GRID_W, GRID_H);
-	grid_draw(grid, GRID_W, GRID_H);
 
 	SDL_WM_SetCaption( "Event test", NULL );
 
 	for(;;) {
 		while(SDL_PollEvent(&event)) {
+			grid_draw(grid, GRID_W, GRID_H);
 			switch(event.type) {
 			case SDL_QUIT:
 				goto done;
 			default:
-				printf("unkown event type %d\n", event.type);
+				printf("unhandled event type %d\n", event.type);
 
 			}
 		}
