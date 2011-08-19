@@ -102,14 +102,13 @@ int main(__unused int argc, __unused char **argv)
 	SDL_Event event;
 
 	init();
+	SDL_WM_SetCaption( "gf testing", NULL );
 
 	grid_init(grid, GRID_W, GRID_H);
-
-	SDL_WM_SetCaption( "Event test", NULL );
+	grid_draw(grid, GRID_W, GRID_H);
 
 	for(;;) {
 		while(SDL_PollEvent(&event)) {
-			grid_draw(grid, GRID_W, GRID_H);
 			switch(event.type) {
 			case SDL_QUIT:
 				goto done;
