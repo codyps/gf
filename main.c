@@ -47,6 +47,18 @@ static void grid_init(struct tile *grid, int width, int vert)
 	}
 }
 
+static void grid_recolor(struct tile *grid, int width, int vert)
+{
+	int v;
+	for (v = 0; v < vert; v++) {
+		int w;
+		for (w = 0; w < width; w++) {
+			struct tile *tile = grid + v * width + w;
+			tile->color = rand();
+		}
+	}
+}
+
 static void grid_draw(struct tile *grid, int width, int vert)
 {
 	int v;
@@ -55,7 +67,7 @@ static void grid_draw(struct tile *grid, int width, int vert)
 		for (w = 0; w < width; w++) {
 			struct tile *tile = grid + v * width + w;
 			if (SDL_FillRect(screen, &tile->rect, tile->color) == -1)
-				eprint("FillRect\n");
+				eprint("FillRect");
 		}
 	}
 }
@@ -66,7 +78,7 @@ static int init(void)
 
 	const SDL_VideoInfo *info = SDL_GetVideoInfo();
 
-	int vid_flags = 0;
+	int vid_flags = /* SDL_FULLSCREEN */ 0;
 	if (info->hw_available) {
 		eprint("Video: using hardware.");
 		vid_flags |= SDL_HWSURFACE | SDL_OPENGL | SDL_GL_DOUBLEBUFFER;
@@ -110,6 +122,10 @@ int main(__unused int argc, __unused char **argv)
 	for(;;) {
 		while(SDL_PollEvent(&event)) {
 			switch(event.type) {
+			case 3:
+				grid_recolor(grid, GRID_W, GRID_H);
+				grid_draw(grid, GRID_W, GRID_H);
+				break;
 			case SDL_QUIT:
 				goto done;
 			default:
