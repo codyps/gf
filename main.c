@@ -27,30 +27,44 @@ struct tile {
 };
 
 /* a set of tiles. */
-struct grid {
+struct world {
 	size_t w;
 	size_t h;
 	struct tile *ts;
 };
 
-/* a view of the grid with a particular centering "goal" */
-struct view {
-	/* centering target */
+struct location {
 	int64_t x;
 	int64_t y;
+	struct world *world;
+};
+
+/* something which exsists in the world */
+struct actor {
+	struct location loc;
+};
+
+/* a view of the world with a particular centering "goal" */
+struct view {
+	/* the world this is a view of (worlds may have multiple views, views
+	 * are only of a single world) */
+	struct location loc;
+
+	int w, h; /* size of the view */
+
 };
 
 typedef int (tile_fn)(struct tile *t, int x, int y, void *data);
 
 static SDL_Surface *screen;
 
-static int grid_for_each_tile(struct grid *grid, tile_fn *op, void *data)
+static int world_for_each_tile(struct world *world, tile_fn *op, void *data)
 {
 	size_t y, y_off;
-	for (y = 0, y_off = 0; y < grid->h; y++, y_off += grid->w) {
+	for (y = 0, y_off = 0; y < world->h; y++, y_off += world->w) {
 		size_t x;
-		for (x = 0; x < grid->w; x++) {
-			struct tile *tile = grid->ts + y * grid->w + x;
+		for (x = 0; x < world->w; x++) {
+			struct tile *tile = world->ts + y * world->w + x;
 
 			int ret = op(tile, x, y, data);
 			if (ret < 0)
@@ -74,16 +88,16 @@ static int tile_setup(struct tile *tile, int x, int y, __unused void *data)
 	return 0;
 }
 
-static int grid_init(struct grid *grid, int width, int height)
+static int world_init(struct world *world, int width, int height)
 {
-	grid->w = width;
-	grid->h = height;
-	grid->ts = malloc(sizeof(*grid->ts) * grid->w * grid->h);
+	world->w = width;
+	world->h = height;
+	world->ts = malloc(sizeof(*world->ts) * world->w * world->h);
 
-	if (!grid->ts)
+	if (!world->ts)
 		return -1;
 
-	grid_for_each_tile(grid, tile_setup, NULL);
+	world_for_each_tile(world, tile_setup, NULL);
 
 	return 0;
 }
@@ -94,9 +108,9 @@ static int tile_rand_color(struct tile *tile, __unused int x, __unused int y, __
 	return 0;
 }
 
-static void grid_recolor(struct grid *grid)
+static void world_recolor(struct world *world)
 {
-	grid_for_each_tile(grid, tile_rand_color, NULL);
+	world_for_each_tile(world, tile_rand_color, NULL);
 }
 
 static int tile_draw(struct tile *tile, __unused int x, __unused int y, void *v_screen)
@@ -107,9 +121,23 @@ static int tile_draw(struct tile *tile, __unused int x, __unused int y, void *v_
 	return 0;
 }
 
-static void grid_draw(struct grid *grid)
+static int view_draw(struct view *view)
 {
-	grid_for_each_tile(grid, tile_draw, screen);
+	return world_for_each_tile(view->loc.world, tile_draw, screen);
+}
+
+static int view_init_attach(struct view *view, int w, int h, int x, int y, struct world *world)
+{
+	view->w = w;
+	view->h = h;
+
+	view->loc.x = x;
+	view->loc.y = y;
+	view->loc.world = world;
+
+	/* possibly inform the world about the view */
+
+	return 0;
 }
 
 static int init(void)
@@ -118,7 +146,15 @@ static int init(void)
 
 	const SDL_VideoInfo *info = SDL_GetVideoInfo();
 
-	int vid_flags = 0
+#ifdef USE_OPENGL
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+#endif
+
+	int vid_flags = SDL_DOUBLEBUF
 		/* | SDL_FULLSCREEN */
 		/* | SDL_OPENGL */
 		/* | SDL_GL_DOUBLEBUFFER */
@@ -133,8 +169,8 @@ static int init(void)
 
 	screen = SDL_SetVideoMode(INIT_W, INIT_V, info->vfmt->BitsPerPixel, vid_flags);
 
+#if USE_OPENGL
 	/* GL 2d setup */
-#if 0
 	glViewport(0, 0, INIT_W, INIT_V);
 	glMatrixMode(GL_PROJECTION);
 	glOrtho(0, INIT_W, INIT_V, 0, -1, 1);
@@ -148,19 +184,29 @@ static int init(void)
 static void fini(void)
 {
 	SDL_FreeSurface(screen);
-
 	SDL_Quit();
 }
 
-void handle_keypress(SDL_KeyboardEvent *key, struct grid *grid)
+static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 {
+	struct world *world = view->loc.world;
 	SDL_keysym *ks = &key->keysym;
 
 	switch(ks->sym) {
-	case SDLK_LEFT:
-		grid_recolor(grid);
-		grid_draw(grid);
+	case SDLK_F4:
+		world_recolor(world);
+		view_draw(view);
 		break;
+
+	case SDLK_LEFT:
+		break;
+	case SDLK_RIGHT:
+		break;
+	case SDLK_UP:
+		break;
+	case SDLK_DOWN:
+		break;
+
 	default:
 		eprint("unhandled keypress %d %d", ks->scancode, ks->unicode);
 	}
@@ -169,23 +215,22 @@ void handle_keypress(SDL_KeyboardEvent *key, struct grid *grid)
 int main(__unused int argc, __unused char **argv)
 {
 	SDL_Event event;
-	struct grid grid;
+	struct view view;
+	struct world world;
 
 	init();
 	SDL_WM_SetCaption( "gf testing", NULL );
 
-	if (grid_init(&grid, GRID_W, GRID_H) < 0) {
-		eprint("grid_init failure");
-		exit(-1);
-	}
+	world_init(&world, GRID_W, GRID_H);
+	view_init_attach(&view, GRID_W, GRID_H, 0, 0, &world);
 
-	grid_draw(&grid);
+	view_draw(&view);
 
 	for(;;) {
 		while(SDL_WaitEvent(&event)) {
 			switch(event.type) {
 			case SDL_KEYDOWN:
-				handle_keypress(&event.key, &grid);
+				handle_keypress(&event.key, &view);
 				break;
 			case SDL_QUIT:
 				goto done;
