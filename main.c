@@ -215,7 +215,7 @@ static int init(void)
 
 static void fini(void)
 {
-	SDL_FreeSurface(screen);
+	/* "screen" is freed by SDL_Quit() */
 	SDL_Quit();
 }
 
