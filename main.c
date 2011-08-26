@@ -1,13 +1,15 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include <SDL/SDL.h>
-#include <SDL/SDL_ttf.h>
+//#include <SDL/SDL_image.h>
+//#include <SDL/SDL_ttf.h>
 
 #include <GL/gl.h>
 
-#define INIT_W 840
-#define INIT_V 640
+#define VIEW_W 840
+#define VIEW_H 640
 
 #define RECT_EDGE 25
 
@@ -50,8 +52,8 @@ struct view {
 	 * are only of a single world) */
 	struct location loc;
 
-	int w, h; /* size of the view */
-
+	unsigned w, h; /* size of the view (pixels) */
+	unsigned edge; /* size of a tile edge (pixels) */
 };
 
 typedef int (tile_fn)(struct tile *t, int x, int y, void *data);
@@ -121,19 +123,50 @@ static int tile_draw(struct tile *tile, __unused int x, __unused int y, void *v_
 	return 0;
 }
 
+#define div_ceil(x,y) (((x) > 0) ? 1 + ((x) - 1)/(y) : ((x) / (y)))
+
+static bool world_contains(struct world *world, int64_t x, int64_t y)
+{
+	int64_t xs[2] = { world->w / 2, -div_ceil(world->w, 2) };
+	int64_t ys[2] = { world->h / 2, -div_ceil(world->h, 2) };
+
+	return x < xs[0] && x > xs[1] && y < ys[0] && y > ys[1];
+}
+
 static int view_draw(struct view *view)
 {
+
+	/* number of tiles left and right of the target */
+	unsigned w_tiles = div_ceil(div_ceil(view->w, 2) - view->edge, view->edge);
+
+	/* number of tiles above and below the target */
+	unsigned h_tiles = div_ceil(div_ceil(view->h, 2) - view->edge, view->edge);
+
+	/* starting and ending points */
+	int w[2] = { view->loc.x - w_tiles, view->loc.x + w_tiles };
+	int h[2] = { view->loc.y - h_tiles, view->loc.y + h_tiles };
+
+	/* check for cliping */
+	if     (!world_contains(view->loc.world, w[0], h[0])) {
+	} else if (!world_contains(view->loc.world, w[1], h[1])) {
+	}
+
+	/* (view->loc.x, view->loc.y) is the tile to center. */
+
+
 	return world_for_each_tile(view->loc.world, tile_draw, screen);
 }
 
-static int view_init_attach(struct view *view, int w, int h, int x, int y, struct world *world)
+static int view_init_attach(struct view *view, unsigned w, unsigned h, unsigned edge, int x, int y, struct world *world)
 {
 	view->w = w;
 	view->h = h;
+	view->edge = edge;
 
 	view->loc.x = x;
 	view->loc.y = y;
 	view->loc.world = world;
+
 
 	/* possibly inform the world about the view */
 
@@ -157,7 +190,6 @@ static int init(void)
 	int vid_flags = SDL_DOUBLEBUF
 		/* | SDL_FULLSCREEN */
 		/* | SDL_OPENGL */
-		/* | SDL_GL_DOUBLEBUFFER */
 		;
 	if (info->hw_available) {
 		eprint("Video: using hardware.");
@@ -167,13 +199,13 @@ static int init(void)
 		vid_flags |= SDL_SWSURFACE;
 	}
 
-	screen = SDL_SetVideoMode(INIT_W, INIT_V, info->vfmt->BitsPerPixel, vid_flags);
+	screen = SDL_SetVideoMode(VIEW_W, VIEW_H, info->vfmt->BitsPerPixel, vid_flags);
 
 #if USE_OPENGL
 	/* GL 2d setup */
-	glViewport(0, 0, INIT_W, INIT_V);
+	glViewport(0, 0, VIEW_W, VIEW_H);
 	glMatrixMode(GL_PROJECTION);
-	glOrtho(0, INIT_W, INIT_V, 0, -1, 1);
+	glOrtho(0, VIEW_W, VIEW_H, 0, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 	glDisable(GL_DEPTH_TEST);
 #endif
@@ -219,10 +251,10 @@ int main(__unused int argc, __unused char **argv)
 	struct world world;
 
 	init();
-	SDL_WM_SetCaption( "gf testing", NULL );
+	SDL_WM_SetCaption("gf testing", NULL);
 
 	world_init(&world, GRID_W, GRID_H);
-	view_init_attach(&view, GRID_W, GRID_H, 0, 0, &world);
+	view_init_attach(&view, VIEW_W, VIEW_H, RECT_EDGE, 0, 0, &world);
 
 	view_draw(&view);
 
