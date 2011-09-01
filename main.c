@@ -298,6 +298,19 @@ static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 		exit(EXIT_SUCCESS);
 		break;
 
+	case SDLK_KP_PLUS:
+	case SDLK_PLUS:
+		view->edge ++;
+		view_draw(view);
+		break;
+
+	case SDLK_KP_MINUS:
+	case SDLK_MINUS:
+		if (view->edge)
+			view->edge --;
+		view_draw(view);
+		break;
+
 	default:
 		eprint("unhandled keypress %d %d", ks->scancode, ks->unicode);
 	}
