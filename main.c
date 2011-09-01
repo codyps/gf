@@ -8,8 +8,9 @@
 
 #include <GL/gl.h>
 
-#define VIEW_W 840
-#define VIEW_H 640
+static SDL_Rect default_vid_mode = { 0, 0, 860, 640 };
+static SDL_Rect *vid_mode = &default_vid_mode;
+static SDL_Rect **vid_modes;
 
 #define RECT_EDGE 25
 
@@ -175,9 +176,15 @@ static int view_init_attach(struct view *view, unsigned w, unsigned h, unsigned 
 
 static int init(void)
 {
+
 	SDL_Init(SDL_INIT_EVERYTHING);
 
 	const SDL_VideoInfo *info = SDL_GetVideoInfo();
+
+	if (!info) {
+		eprint("Video: none found, exiting.");
+		exit(EXIT_FAILURE);
+	}
 
 #ifdef USE_OPENGL
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
@@ -199,13 +206,30 @@ static int init(void)
 		vid_flags |= SDL_SWSURFACE;
 	}
 
-	screen = SDL_SetVideoMode(VIEW_W, VIEW_H, info->vfmt->BitsPerPixel, vid_flags);
+	SDL_Rect **modes = SDL_ListModes(info->vfmt, vid_flags);
+
+	if (!modes) {
+		eprint("Video: no modes avaliable.");
+		exit(EXIT_FAILURE);
+	} else if (modes == (SDL_Rect **)-1) {
+		eprint("Video: no restriction on modes.");
+	} else {
+		vid_modes = modes;
+		int i;
+		for(i = 0; modes[i]; i++) {
+			eprint("vid_mode: %d x %d", modes[i]->w, modes[i]->h);
+			vid_mode = modes[i];
+		}
+	}
+
+	screen = SDL_SetVideoMode(vid_mode->w, vid_mode->h, info->vfmt->BitsPerPixel, vid_flags);
+	SDL_ShowCursor(SDL_DISABLE);
 
 #if USE_OPENGL
 	/* GL 2d setup */
-	glViewport(0, 0, VIEW_W, VIEW_H);
+	glViewport(0, 0, vid_mode->w, vid_mode->h);
 	glMatrixMode(GL_PROJECTION);
-	glOrtho(0, VIEW_W, VIEW_H, 0, -1, 1);
+	glOrtho(0, vid_mode->w, vid_mode->h, 0, -1, 1);
 	glMatrixMode(GL_MODELVIEW);
 	glDisable(GL_DEPTH_TEST);
 #endif
@@ -239,6 +263,11 @@ static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 	case SDLK_DOWN:
 		break;
 
+	case SDLK_q:
+		fini();
+		exit(EXIT_SUCCESS);
+		break;
+
 	default:
 		eprint("unhandled keypress %d %d", ks->scancode, ks->unicode);
 	}
@@ -254,7 +283,7 @@ int main(__unused int argc, __unused char **argv)
 	SDL_WM_SetCaption("gf testing", NULL);
 
 	world_init(&world, GRID_W, GRID_H);
-	view_init_attach(&view, VIEW_W, VIEW_H, RECT_EDGE, 0, 0, &world);
+	view_init_attach(&view, vid_mode->w, vid_mode->h, RECT_EDGE, 0, 0, &world);
 
 	view_draw(&view);
 
