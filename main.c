@@ -8,7 +8,7 @@
 
 #include <GL/gl.h>
 
-static SDL_Rect default_vid_mode = { 0, 0, 860, 640 };
+static SDL_Rect default_vid_mode = { .w = 860, .h = 640 };
 static SDL_Rect *vid_mode = &default_vid_mode;
 static SDL_Rect **vid_modes;
 
@@ -25,7 +25,6 @@ static SDL_Rect **vid_modes;
 } while (0)
 
 struct tile {
-	SDL_Rect rect;
 	uint32_t color;
 };
 
@@ -61,6 +60,18 @@ typedef int (tile_fn)(struct tile *t, int x, int y, void *data);
 
 static SDL_Surface *screen;
 
+#define w_for_each_tile(world, tile, i) for (i = 0; i < world->h * world->w && ( tile = world->ts + i, true ) ; i++)
+
+static int w_ix_to_x(struct world *world, int i)
+{
+	return i / world->w;
+}
+
+static int w_ix_to_y(struct world *world, int i)
+{
+	return i % world->w;
+}
+
 static int world_for_each_tile(struct world *world, tile_fn *op, void *data)
 {
 	size_t y, y_off;
@@ -80,14 +91,7 @@ static int world_for_each_tile(struct world *world, tile_fn *op, void *data)
 
 static int tile_setup(struct tile *tile, int x, int y, __unused void *data)
 {
-	SDL_Rect *r = &tile->rect;
-	r->w = RECT_EDGE;
-	r->h = RECT_EDGE;
-	r->x = x * RECT_EDGE;
-	r->y = y * RECT_EDGE;
-
 	tile->color = (y << 18) | ((x & 0xffff) << 2) | rand();
-
 	return 0;
 }
 
@@ -116,16 +120,9 @@ static void world_recolor(struct world *world)
 	world_for_each_tile(world, tile_rand_color, NULL);
 }
 
-static int tile_draw(struct tile *tile, __unused int x, __unused int y, void *v_screen)
-{
-	SDL_Surface *screen = v_screen;
-	if (SDL_FillRect(screen, &tile->rect, tile->color) == -1)
-		eprint("FillRect");
-	return 0;
-}
-
 #define div_ceil(x,y) (((x) > 0) ? 1 + ((x) - 1)/(y) : ((x) / (y)))
 
+#if 0
 static bool world_contains(struct world *world, int64_t x, int64_t y)
 {
 	int64_t xs[2] = { world->w / 2, -div_ceil(world->w, 2) };
@@ -133,8 +130,23 @@ static bool world_contains(struct world *world, int64_t x, int64_t y)
 
 	return x < xs[0] && x > xs[1] && y < ys[0] && y > ys[1];
 }
+#endif
 
-static int view_draw(struct view *view)
+static int tile_draw(struct tile *tile, unsigned px, unsigned py, unsigned edge_len, SDL_Surface *screen)
+{
+	SDL_Rect rect = {
+		.x = px,
+		.y = py,
+		.w = edge_len,
+		.h = edge_len
+	};
+
+	if (SDL_FillRect(screen, &rect, tile->color) == -1)
+		eprint("failure in SDL_FillRect");
+	return 0;
+}
+
+static void view_draw(struct view *view)
 {
 
 	/* number of tiles left and right of the target */
@@ -148,14 +160,32 @@ static int view_draw(struct view *view)
 	int h[2] = { view->loc.y - h_tiles, view->loc.y + h_tiles };
 
 	/* check for cliping */
-	if     (!world_contains(view->loc.world, w[0], h[0])) {
-	} else if (!world_contains(view->loc.world, w[1], h[1])) {
-	}
+	int w_constrain = 0, h_constrain = 0;
+
+	struct world *world = view->loc.world;
+	if (w[0] < 0)
+		w_constrain = -1;
+	else if (w[1] > 0 && (unsigned) w[1] > world->w)
+		w_constrain = +1;
+
+	if (h[0] < 0)
+		h_constrain = -1;
+	else if (h[1] > 0 && (unsigned) h[1] > world->h)
+		h_constrain = +1;
 
 	/* (view->loc.x, view->loc.y) is the tile to center. */
 
 
-	return world_for_each_tile(view->loc.world, tile_draw, screen);
+	struct tile *tile;
+	unsigned i;
+	w_for_each_tile(world, tile, i) {
+		int y = w_ix_to_y(world, i);
+		int x = w_ix_to_x(world, i);
+		unsigned px = x * view->edge;
+		unsigned py = y * view->edge;
+		tile_draw(tile, px, py, view->edge, screen);
+	}
+
 }
 
 static int view_init_attach(struct view *view, unsigned w, unsigned h, unsigned edge, int x, int y, struct world *world)
