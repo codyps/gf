@@ -6,7 +6,9 @@
 //#include <SDL/SDL_image.h>
 //#include <SDL/SDL_ttf.h>
 
-#include <GL/gl.h>
+#ifdef USE_OPENGL
+# include <GL/gl.h>
+#endif
 
 static SDL_Rect default_vid_mode = { .w = 860, .h = 640 };
 static SDL_Rect *vid_mode = &default_vid_mode;
@@ -54,6 +56,8 @@ struct view {
 
 	unsigned w, h; /* size of the view (pixels) */
 	unsigned edge; /* size of a tile edge (pixels) */
+
+	unsigned off_px, off_py;
 };
 
 typedef int (tile_fn)(struct tile *t, int x, int y, void *data);
@@ -181,8 +185,8 @@ static void view_draw(struct view *view)
 	w_for_each_tile(world, tile, i) {
 		int y = w_ix_to_y(world, i);
 		int x = w_ix_to_x(world, i);
-		unsigned px = x * view->edge;
-		unsigned py = y * view->edge;
+		unsigned px = x * view->edge + view->off_px;
+		unsigned py = y * view->edge + view->off_py;
 		tile_draw(tile, px, py, view->edge, screen);
 	}
 
@@ -190,6 +194,9 @@ static void view_draw(struct view *view)
 
 static int view_init_attach(struct view *view, unsigned w, unsigned h, unsigned edge, int x, int y, struct world *world)
 {
+
+	view->off_px = view->off_py = 0;
+
 	view->w = w;
 	view->h = h;
 	view->edge = edge;
@@ -273,6 +280,19 @@ static void fini(void)
 	SDL_Quit();
 }
 
+static void view_move_x(struct view *view, int shift)
+{
+	view->off_px += shift;
+}
+
+static void view_move_y(struct view *view, int shift)
+{
+	view->off_py += shift;
+}
+
+
+#define SHIFT_PX 10
+
 static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 {
 	struct world *world = view->loc.world;
@@ -285,12 +305,21 @@ static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 		break;
 
 	case SDLK_LEFT:
+		view_move_x(view, -SHIFT_PX);
+		view_draw(view);
 		break;
+
 	case SDLK_RIGHT:
+		view_move_x(view, SHIFT_PX);
+		view_draw(view);
 		break;
 	case SDLK_UP:
+		view_move_y(view, -SHIFT_PX);
+		view_draw(view);
 		break;
 	case SDLK_DOWN:
+		view_move_y(view, SHIFT_PX);
+		view_draw(view);
 		break;
 
 	case SDLK_q:
@@ -300,15 +329,21 @@ static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 
 	case SDLK_KP_PLUS:
 	case SDLK_PLUS:
-		view->edge ++;
-		view_draw(view);
+	case SDLK_EQUALS:
+		if ((int)view->edge < screen->h && (int)view->edge < screen->w) {
+			/* TODO: make this non-linear */
+			view->edge *= 2;
+			view_draw(view);
+		}
 		break;
 
 	case SDLK_KP_MINUS:
 	case SDLK_MINUS:
-		if (view->edge)
-			view->edge --;
-		view_draw(view);
+		if (view->edge > 1) {
+			/* TODO: make this non-linear */
+			view->edge /= 2;
+			view_draw(view);
+		}
 		break;
 
 	default:
@@ -339,7 +374,7 @@ int main(__unused int argc, __unused char **argv)
 			case SDL_QUIT:
 				goto done;
 			default:
-				printf("unhandled event type %d\n", event.type);
+				eprint("unhandled event type %d", event.type);
 
 			}
 			SDL_Flip(screen);
