@@ -179,6 +179,15 @@ static void view_draw(struct view *view)
 
 	/* (view->loc.x, view->loc.y) is the tile to center. */
 
+	SDL_Rect back = {
+		.x = 0,
+		.y = 0,
+		.w = view->w,
+		.h = view->h
+	};
+
+	SDL_FillRect(screen, &back, 0);
+
 
 	struct tile *tile;
 	unsigned i;
@@ -305,20 +314,20 @@ static void handle_keypress(SDL_KeyboardEvent *key, struct view *view)
 		break;
 
 	case SDLK_LEFT:
-		view_move_x(view, -SHIFT_PX);
+		view_move_x(view, -SHIFT_PX * view->edge);
 		view_draw(view);
 		break;
 
 	case SDLK_RIGHT:
-		view_move_x(view, SHIFT_PX);
+		view_move_x(view, SHIFT_PX * view->edge);
 		view_draw(view);
 		break;
 	case SDLK_UP:
-		view_move_y(view, -SHIFT_PX);
+		view_move_y(view, -SHIFT_PX * view->edge);
 		view_draw(view);
 		break;
 	case SDLK_DOWN:
-		view_move_y(view, SHIFT_PX);
+		view_move_y(view, SHIFT_PX * view->edge);
 		view_draw(view);
 		break;
 
