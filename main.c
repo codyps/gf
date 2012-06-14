@@ -153,6 +153,7 @@ static int tile_draw(struct tile *tile, unsigned px, unsigned py, unsigned edge_
 static void view_draw(struct view *view)
 {
 
+#if 0
 	/* number of tiles left and right of the target */
 	unsigned w_tiles = div_ceil(div_ceil(view->w, 2) - view->edge, view->edge);
 
@@ -176,6 +177,7 @@ static void view_draw(struct view *view)
 		h_constrain = -1;
 	else if (h[1] > 0 && (unsigned) h[1] > world->h)
 		h_constrain = +1;
+#endif
 
 	/* (view->loc.x, view->loc.y) is the tile to center. */
 
@@ -191,6 +193,7 @@ static void view_draw(struct view *view)
 
 	struct tile *tile;
 	unsigned i;
+	struct world *world = view->loc.world;
 	w_for_each_tile(world, tile, i) {
 		int y = w_ix_to_y(world, i);
 		int x = w_ix_to_x(world, i);
